@@ -1,37 +1,26 @@
+#include <math.h>
 #include <Windows.h>
-#include <Mmdeviceapi.h>
-#include <endpointvolume.h>
-#include <Functiondiscoverykeys_devpkey.h>
 #include <Tolk.h>
+#include <bass.h>
+#include <SimpleIni.h>
 
-// Yes, globals, I know, sorry about that.
-IMMDeviceEnumerator* enumerator;
-IMMDevice* default_device;
-IAudioEndpointVolume* endpoint_volume;
+int min_level; // The minimum level (in DB) to indicate muted state.
 
+bool load_config();
 void check_mic_state();
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+float linear_to_decibel(float linear);
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE pinst, LPSTR cmdline, int show) {
 	HRESULT hr;
 	CoInitialize(NULL);
 	Tolk_Load();
-	hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_INPROC_SERVER, __uuidof(IMMDeviceEnumerator), (LPVOID*)&enumerator);
-	if (FAILED(hr)) {
-		CoUninitialize();
+	if (!BASS_RecordInit(-1)) {
+		MessageBox(NULL, "Failed to initialize Bass.", "Error", MB_ICONERROR);
 		return 1;
 	}
-	hr = enumerator->GetDefaultAudioEndpoint(eCapture, eConsole, &default_device);
-	if (FAILED(hr)) {
-		enumerator->Release();
-		CoUninitialize();
-		return 1;
-	}
-	hr = default_device->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_INPROC_SERVER, NULL, (LPVOID *)&endpoint_volume);
-	if (FAILED(hr)) {
-		default_device->Release();
-		enumerator->Release();
-		CoUninitialize();
+	if (!load_config()) {
+		MessageBox(NULL, "Couldn't load configuration.", "Error", MB_ICONERROR);
 		return 1;
 	}
 	WNDCLASS wc = {0};
@@ -45,19 +34,36 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE pinst, LPSTR cmdline, int show) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
-	endpoint_volume->Release();
-	default_device->Release();
-	enumerator->Release();
-	Tolk_Unload();
-	UnregisterHotKey(hwnd, 1);
-	CoUninitialize();
 	return 0;
 }
 
+bool load_config() {
+	const char* filename = "config.ini";
+	CSimpleIniA ini;
+	SI_Error rc = ini.LoadFile(filename);
+	if (rc < 0) {
+		ini.SetValue("DEFAULT", "min_level", "-60");
+		ini.SaveFile(filename);
+	}
+	rc = ini.LoadFile(filename);
+	if (rc < 0) return false;
+	const char* min_level_str = ini.GetValue("DEFAULT", "min_level", "-60");
+	min_level = std::atoi(min_level_str);
+	return true;
+}
+
 void check_mic_state() {
-	BOOL is_muted;
-	endpoint_volume->GetMute(&is_muted);
-	Tolk_Output(is_muted ? L"Muted" : L"Unmuted");
+	HRECORD rec = BASS_RecordStart(0, 0, 0, NULL, NULL);
+	if (rec == 0) {
+		Beep(100, 100);
+		return;
+	}
+	Sleep(50);
+	FLOAT levels[2];
+	BASS_ChannelGetLevelEx(rec, levels, 1.0, BASS_LEVEL_MONO);
+	BASS_ChannelFree(rec);
+	int level = linear_to_decibel(levels[0]);
+	Tolk_Output(level <= min_level ? L"Muted" : L"Unmuted");
 }
 
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -73,9 +79,6 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 			check_mic_state();
 		break;
 	case WM_DESTROY:
-		endpoint_volume->Release();
-		default_device->Release();
-		enumerator->Release();
 		Tolk_Unload();
 		UnregisterHotKey(hwnd, 1);
 		CoUninitialize();
@@ -85,4 +88,14 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 		return DefWindowProc(hwnd, msg, wp, lp);
 	}
 	return 0;
+}
+
+// https://forum.juce.com/t/float-to-decibel-conversion/1841
+float linear_to_decibel(float linear) {
+	float db;
+	if (linear != 0.0f)
+		db = 20.0f * log10(linear);
+	else
+		db = -144.0f;  // effectively minus infinity
+	return db;
 }

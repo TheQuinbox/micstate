@@ -12,8 +12,6 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 float linear_to_decibel(float linear);
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE pinst, LPSTR cmdline, int show) {
-	HRESULT hr;
-	CoInitialize(NULL);
 	Tolk_Load();
 	if (!BASS_RecordInit(-1)) {
 		MessageBox(NULL, "Failed to initialize Bass.", "Error", MB_ICONERROR);

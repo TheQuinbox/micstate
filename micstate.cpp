@@ -85,6 +85,13 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 		case WM_LBUTTONDOWN:
 		case WM_RBUTTONDBLCLK:
 		case WM_RBUTTONDOWN:
+			show_popup_menu(hwnd);
+			break;
+		}
+		break;
+	case WM_COMMAND:
+		switch (LOWORD(wp)) {
+		case ID_EXIT:
 			PostQuitMessage(0);
 			break;
 		}
@@ -123,4 +130,16 @@ void destroy_tray_icon(HWND hwnd, UINT id) {
 	ndata.hWnd = hwnd;
 	ndata.uID = id;
 	Shell_NotifyIcon(NIM_DELETE, &ndata);
+}
+
+void show_popup_menu(HWND hwnd) {
+	HMENU menu = CreatePopupMenu();
+	AppendMenu(menu, MF_STRING, ID_EXIT, "Exit");
+	POINT cursor;
+	GetCursorPos(&cursor);
+	// So this is really stupid, if we don't call this the menu will never take keyboard or mouse focus, even though our window is invisible.
+	SetForegroundWindow(hwnd);
+	TrackPopupMenu(menu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, cursor.x, cursor.y, 0, hwnd, NULL);
+	PostMessage(hwnd, WM_NULL, 0, 0);
+	DestroyMenu(menu);
 }

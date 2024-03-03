@@ -3,13 +3,7 @@
 #include <Tolk.h>
 #include <bass.h>
 #include <SimpleIni.h>
-
-int min_level; // The minimum level (in DB) to indicate muted state.
-
-bool load_config();
-void check_mic_state();
-LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-float linear_to_decibel(float linear);
+#include "micstate.h"
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE pinst, LPSTR cmdline, int show) {
 	Tolk_Load();
@@ -28,11 +22,16 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE pinst, LPSTR cmdline, int show) {
 	wc.lpszClassName = "MicstateWNDClass";
 	RegisterClass(&wc);
 	HWND hwnd = CreateWindow(wc.lpszClassName, 0, 0, 0, 0, 0, 0, 0, 0, inst, 0);
+	HICON icon = LoadIcon(NULL, IDI_APPLICATION);
+	show_tray_icon(hwnd, 1, icon, "Micstate");
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+	Tolk_Unload();
+	UnregisterHotKey(hwnd, 1);
+	destroy_tray_icon(hwnd, 1);
 	return 0;
 }
 
@@ -78,10 +77,17 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 			check_mic_state();
 		break;
 	case WM_DESTROY:
-		Tolk_Unload();
-		UnregisterHotKey(hwnd, 1);
-		CoUninitialize();
 		PostQuitMessage(0);
+		break;
+	case WM_USER + 1:
+		switch (lp) {
+		case WM_LBUTTONDBLCLK:
+		case WM_LBUTTONDOWN:
+		case WM_RBUTTONDBLCLK:
+		case WM_RBUTTONDOWN:
+			PostQuitMessage(0);
+			break;
+		}
 		break;
 	default:
 		return DefWindowProc(hwnd, msg, wp, lp);
@@ -97,4 +103,24 @@ float linear_to_decibel(float linear) {
 	else
 		db = -144.0f;  // effectively minus infinity
 	return db;
+}
+
+void show_tray_icon(HWND hwnd, UINT id, HICON icon, LPSTR tooltip) {
+	NOTIFYICONDATA ndata;
+	ndata.cbSize = sizeof(NOTIFYICONDATA);
+	ndata.hWnd = hwnd;
+	ndata.uID = id;
+	ndata.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+	ndata.uCallbackMessage = WM_USER + 1;
+	ndata.hIcon = icon;
+	strcpy_s(ndata.szTip, sizeof(ndata.szTip) / sizeof(ndata.szTip[0]), tooltip);
+	Shell_NotifyIcon(NIM_ADD, &ndata);
+}
+
+void destroy_tray_icon(HWND hwnd, UINT id) {
+	NOTIFYICONDATA ndata;
+	ndata.cbSize = sizeof(NOTIFYICONDATA);
+	ndata.hWnd = hwnd;
+	ndata.uID = id;
+	Shell_NotifyIcon(NIM_DELETE, &ndata);
 }

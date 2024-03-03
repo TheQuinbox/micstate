@@ -13,6 +13,7 @@ float linear_to_decibel(float linear);
 
 int WINAPI WinMain(HINSTANCE inst, HINSTANCE pinst, LPSTR cmdline, int show) {
 	Tolk_Load();
+	Tolk_TrySAPI(true);
 	if (!BASS_RecordInit(-1)) {
 		MessageBox(NULL, "Failed to initialize Bass.", "Error", MB_ICONERROR);
 		return 1;
@@ -61,7 +62,7 @@ void check_mic_state() {
 	BASS_ChannelGetLevelEx(rec, levels, 1.0, BASS_LEVEL_MONO);
 	BASS_ChannelFree(rec);
 	int level = linear_to_decibel(levels[0]);
-	Tolk_Output(level <= min_level ? L"Muted" : L"Unmuted");
+	Tolk_Output(level <= min_level ? L"Muted" : L"Unmuted", true);
 }
 
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {

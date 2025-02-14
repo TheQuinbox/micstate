@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(micstate LANGUAGES C)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Release)
+
 add_executable(micstate WIN32 micstate.c)
 target_include_directories(micstate PRIVATE include)
 target_link_directories(micstate PRIVATE lib)
